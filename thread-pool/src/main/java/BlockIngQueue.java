@@ -73,12 +73,14 @@ public class BlockIngQueue<T> {
         try {
             while (deque.size()==capatity){
                 try {
+                    log.debug("等待加入任务队列{}",element);
                     fullWartSet.await();
                 }catch (InterruptedException e){
                     e.printStackTrace();
                 }
 
             }
+            log.debug("加入任务队列{}",element);
             deque.addLast(element);
             emptyWaitSet.signal();
         }finally {
@@ -116,7 +118,7 @@ class ThreadPool{
                 workers.add(worker);
                 worker.start();
             } else {
-                log.debug("加入任务队列{}",task);
+
                 blockIngQueue.put(task);
             }
         }

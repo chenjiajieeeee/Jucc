@@ -11,6 +11,11 @@ public class    Main {
             for(int i=0;i<5;i++){
                 final int j=i;
                 threadPool.execute(()->{
+                    try {
+                        Thread.sleep(1000000L);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                     log.debug("{}",j);
                 });
             }
