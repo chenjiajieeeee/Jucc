@@ -87,6 +87,30 @@ public class BlockIngQueue<T> {
             lock.unlock();
         }
     }
+    //带超时时间的添加方法
+    public boolean offer(T element,long timeout,TimeUnit timeUnit){
+        lock.lock();
+        try {
+            long nanos=timeUnit.toNanos(timeout);
+
+            while (deque.size()==capatity){
+                try {
+                    log.debug("等待加入任务队列{}",element);
+                    if(nanos<=0)return false;
+                    nanos=fullWartSet.awaitNanos(nanos);
+                }catch (InterruptedException e){
+                    e.printStackTrace();
+                }
+
+            }
+            log.debug("加入任务队列{}",element);
+            deque.addLast(element);
+            emptyWaitSet.signal();
+            return true;
+        }finally {
+            lock.unlock();
+        }
+    }
     public int size(){
         lock.lock();
         try {
@@ -95,6 +119,25 @@ public class BlockIngQueue<T> {
             lock.unlock();
         }
     }
+
+    public void tryPut(RejectPolicy<T> rejectPolicy, T task) {
+        lock.lock();
+        try {
+            if(deque.size()==capatity){
+                rejectPolicy.reject(this,task);
+            }else {
+                log.debug("加入任务队列{}",task);
+                deque.addLast(task);
+                emptyWaitSet.signal();
+            }
+        }finally {
+            lock.unlock();
+        }
+    }
+}
+@FunctionalInterface
+interface RejectPolicy<T>{
+    void reject(BlockIngQueue<T> queue,T task);
 }
 
 @Slf4j(topic = "c.BlockIngQueue")
@@ -107,6 +150,8 @@ class ThreadPool{
 
     private TimeUnit timeUnit;
 
+    private RejectPolicy<Runnable> rejectPolicy;
+
     public void execute(Runnable task){
         //根据当前任务队列数量进行处理
         //超过coresize时，加入任务队列暂存
@@ -118,18 +163,23 @@ class ThreadPool{
                 workers.add(worker);
                 worker.start();
             } else {
-
-                blockIngQueue.put(task);
+                //死等
+                //带超时等待
+                //放弃任务执行
+                //抛出异常
+                //让调用者自己执行任务
+                blockIngQueue.tryPut(rejectPolicy,task);
             }
         }
 
     }
 
-    public ThreadPool(int coreSize,long timeOut,TimeUnit timeUnit,int queueCapatity){
+    public ThreadPool(int coreSize,long timeOut,TimeUnit timeUnit,int queueCapatity,RejectPolicy<Runnable> rejectPolicy){
         this.coreSize=coreSize;
         this.timeOut=timeOut;
         this.timeUnit=timeUnit;
         this.blockIngQueue=new BlockIngQueue<>(queueCapatity);
+        this.rejectPolicy=rejectPolicy;
     }
 
     class Worker extends Thread{
